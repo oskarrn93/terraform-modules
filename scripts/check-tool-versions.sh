@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Fails if the installed terraform, tflint or terraform-docs differ from the
-# versions pinned in .tool-versions (the ones CI uses), so local checks and CI
-# can't disagree. `mise install` (or asdf) installs exactly the pinned versions.
+# pinned versions (the ones CI uses), so local checks and CI can't disagree:
+#   .terraform-version  terraform, managed by tfenv (`tfenv install`)
+#   .tool-versions      tflint and terraform-docs (`mise install` or asdf)
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -14,21 +15,28 @@ installed() {
 }
 
 status=0
-while read -r tool want; do
-  [ -z "$tool" ] || [ "${tool#\#}" != "$tool" ] && continue
+while read -r tool want file; do
   if ! command -v "$tool" >/dev/null; then
-    echo "$tool is not installed (want $want, see .tool-versions)"
+    echo "$tool is not installed (want $want, see $file)"
     status=1
     continue
   fi
-  have=$(installed "$tool")
-  if [ "$have" != "$want" ]; then
-    echo "$tool $have is installed, but .tool-versions pins $want"
+  # tfenv's terraform shim follows .terraform-version, so it fails (instead of
+  # reporting another version) when that version isn't installed yet.
+  have=$(installed "$tool" 2>/dev/null || true)
+  if [ -z "$have" ]; then
+    echo "$tool $want (from $file) is not installed or doesn't run"
+    status=1
+  elif [ "$have" != "$want" ]; then
+    echo "$tool $have is installed, but $file pins $want"
     status=1
   fi
-done < .tool-versions
+done < <(
+  echo "terraform $(cat .terraform-version) .terraform-version"
+  awk 'NF && $1 !~ /^#/ { print $1, $2, ".tool-versions" }' .tool-versions
+)
 
 if [ "$status" -ne 0 ]; then
-  echo "Install the pinned versions, e.g. with 'mise install', so local checks match CI."
+  echo "Install the pinned versions so local checks match CI: 'tfenv install' for terraform, 'mise install' for the rest."
 fi
 exit "$status"

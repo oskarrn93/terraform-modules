@@ -1,7 +1,7 @@
 name: Tool versions
 
-# Weekly: bumps the tools Dependabot can't (terraform, tflint and
-# terraform-docs in .tool-versions, the aws plugin in .tflint.hcl) to their
+# Weekly: bumps the tools Dependabot can't (terraform in .terraform-version,
+# tflint and terraform-docs in .tool-versions, the aws plugin in .tflint.hcl) to their
 # latest releases and opens or updates one PR with the changes.
 #
 # PRs opened with GITHUB_TOKEN don't trigger pull_request workflows, so this
@@ -50,7 +50,13 @@ jobs:
             fi
           }
 
-          bump_tool terraform hashicorp/terraform
+          current=$(cat .terraform-version)
+          new=$(latest hashicorp/terraform)
+          if [ -n "$new" ] && [ "$new" != "$current" ]; then
+            echo "$new" > .terraform-version
+            changes+=("- \`terraform\` $current → $new ([changelog](https://github.com/hashicorp/terraform/releases/tag/v$new))")
+          fi
+
           bump_tool tflint terraform-linters/tflint
           bump_tool terraform-docs terraform-docs/terraform-docs
 
@@ -72,7 +78,7 @@ jobs:
             echo
             printf '%s\n' "${changes[@]}"
             echo
-            echo "After merging, install the new versions locally (e.g. \`mise install\`); the pre-commit hook fails until they match."
+            echo "After merging, install the new versions locally (\`tfenv install\`, \`mise install\`); the pre-commit hook fails until they match."
           } > "$RUNNER_TEMP/body.md"
           cat "$RUNNER_TEMP/body.md"
           echo "changed=true" >> "$GITHUB_OUTPUT"
@@ -83,7 +89,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "$BRANCH"
-          git commit -am "Update tool versions"
+          git add .terraform-version .tool-versions .tflint.hcl
+          git commit -m "Update tool versions"
           git push --force origin "$BRANCH"
 
           if [ -n "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[]')" ]; then

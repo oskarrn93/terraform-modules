@@ -1,60 +1,25 @@
 # terraform-modules
 
-Shared Terraform modules for my AWS setup, used by
-[AWS](https://github.com/oskarrn93/AWS) and [Pappa-hemsidor](https://github.com/oskarrn93/Pappa-hemsidor).
+Shared Terraform modules
+
+Each module has its own README with what it does, how to install it, a usage example and the full
+list of inputs and outputs.
 
 | Module | Contents |
 | --- | --- |
-| [`static-website`](static-website) | Several static sites in one private S3 bucket behind one CloudFront distribution, with a shared ACM certificate, Route 53 aliases, `www.` → apex redirect, optional `preview.` hosts (never indexed), security headers and optional uptime monitoring |
-| [`website-monitoring`](website-monitoring) | Route 53 HTTPS health check + CloudWatch alarm for one domain, emailing through SNS when it goes down and when it recovers |
+| [`static-website`](modules/static-website) | Several static sites in one private S3 bucket behind one CloudFront distribution, with a shared ACM certificate, Route 53 aliases, `www.` → apex redirect, optional `preview.` hosts (never indexed), security headers and optional uptime monitoring |
+| [`website-monitoring`](modules/website-monitoring) | Route 53 HTTPS health check + CloudWatch alarm for one domain, emailing through SNS when it goes down and when it recovers |
 
-## Usage
+Modules are used through git sources pinned to a release tag, e.g.
+`git::https://github.com/oskarrn93/terraform-modules.git//modules/<module>?ref=<module>/vX.Y.Z`.
 
-Reference a module by git source, pinned to one of its tags:
+## Layout
 
-```hcl
-module "static_website" {
-  source = "git::https://github.com/oskarrn93/terraform-modules.git//static-website?ref=static-website/v1.0.0"
-
-  providers = {
-    aws           = aws
-    aws.us_east_1 = aws.us_east_1 # certificate and health checks live in us-east-1
-  }
-
-  name = "example"
-
-  sites = {
-    "example.com" = {
-      zone_id      = aws_route53_zone.example.zone_id
-      content_path = "${path.root}/site" # optional: uploaded to example.com/ in the bucket
-      preview      = true                # also serve preview.example.com
-    }
-  }
-
-  monitoring = {
-    emails = ["me@example.com"]
-  }
-}
-```
-
-```hcl
-module "website_monitoring" {
-  source = "git::https://github.com/oskarrn93/terraform-modules.git//website-monitoring?ref=website-monitoring/v1.0.0"
-
-  providers = {
-    aws = aws.us_east_1 # Route 53 health check metrics only exist in us-east-1
-  }
-
-  domain_name = "example.com"
-  emails      = ["me@example.com"]
-}
-```
-
-The shared certificate covers each site's apex and wildcard. ACM allows 10 names per certificate by
-default, so more than 5 sites in one `static-website` instance needs a quota increase.
-
-While changing a module, point the consumer at a local checkout instead of the tag, e.g.
-`source = "../terraform-modules/static-website"`, and switch back once the new version is tagged.
+| Path | Contents |
+| --- | --- |
+| `modules/<module>/` | One module: `*.tf`, `README.md`, `examples/` (also used to validate it) and `tests/` |
+| `scripts/` | Helper scripts used by pre-commit and CI |
+| `.github/workflows/` | CI, releases and weekly tool updates |
 
 ## Versioning
 
@@ -71,27 +36,32 @@ Modules set only minimum Terraform and provider versions; consumers pin the exac
 
 ## Development
 
-Needs [Terraform](https://developer.hashicorp.com/terraform/install),
-[TFLint](https://github.com/terraform-linters/tflint) and [terraform-docs](https://terraform-docs.io)
-at the versions pinned in [`.tool-versions`](.tool-versions) (the ones CI uses), plus
-[pre-commit](https://pre-commit.com) and [Node.js](https://nodejs.org) (LTS, for the CloudFront
-Function tests). Once per clone:
+Needs these at the pinned versions, the same ones CI uses:
+
+| Tool | Version file | Install with |
+| --- | --- | --- |
+| [Terraform](https://developer.hashicorp.com/terraform/install) | [`.terraform-version`](.terraform-version) | [tfenv](https://github.com/tfutils/tfenv): `tfenv install` (its `terraform` shim then picks the version up automatically) |
+| [TFLint](https://github.com/terraform-linters/tflint), [terraform-docs](https://terraform-docs.io) | [`.tool-versions`](.tool-versions) | [mise](https://mise.jdx.dev) or asdf: `mise install` |
+
+Plus [pre-commit](https://pre-commit.com) and [Node.js](https://nodejs.org) (LTS, for the
+CloudFront Function tests). Once per clone:
 
 ```sh
-mise install       # or asdf: installs the versions in .tool-versions
+tfenv install      # terraform from .terraform-version
+mise install       # tflint and terraform-docs from .tool-versions
 pre-commit install # tool versions, terraform fmt, terraform-docs, tflint and whitespace/line-ending fixes on every commit
 tflint --init
 ```
 
 A hook that reformats files fails the commit; review the changes, `git add` and commit again. The
-tool-versions hook fails when an installed tool doesn't match `.tool-versions`.
+tool-versions hook fails when an installed tool doesn't match its version file.
 
 Checks, the same ones CI runs on every pull request (and fails on):
 
 ```sh
 pre-commit run --all-files                                # tool versions, format, docs, lint
-for d in */examples/*/; do terraform -chdir="$d" init -backend=false && terraform -chdir="$d" validate; done
-for m in static-website website-monitoring; do terraform -chdir="$m" init -backend=false && terraform -chdir="$m" test; done
+for d in modules/*/examples/*/; do terraform -chdir="$d" init -backend=false && terraform -chdir="$d" validate; done
+for m in modules/*/; do terraform -chdir="$m" init -backend=false && terraform -chdir="$m" test; done
 node --test                                               # CloudFront Functions
 ```
 
@@ -111,8 +81,9 @@ node --test                                               # CloudFront Functions
 ## Dependency updates
 
 - **Dependabot** (weekly): GitHub Actions, pre-commit hook revs and Terraform.
-- **[Tool versions](.github/workflows/tool-versions.yml)** (weekly): Terraform, TFLint and
-  terraform-docs in `.tool-versions` and the TFLint AWS plugin in `.tflint.hcl`, which Dependabot
+- **[Tool versions](.github/workflows/tool-versions.yml)** (weekly): Terraform in
+  `.terraform-version`, TFLint and terraform-docs in `.tool-versions` and the TFLint AWS plugin in
+  `.tflint.hcl`, which Dependabot
   doesn't support. It opens one PR and runs CI on it. Needs *Allow GitHub Actions to create and
   approve pull requests* under Settings → Actions → General.
 

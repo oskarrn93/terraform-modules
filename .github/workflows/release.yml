@@ -60,8 +60,8 @@ jobs:
           # Paths whose changes affect the module. static-website calls
           # ../website-monitoring, so its changes ship in static-website too.
           case "$MODULE" in
-            static-website) paths=(static-website website-monitoring) ;;
-            *)              paths=("$MODULE") ;;
+            static-website) paths=(modules/static-website modules/website-monitoring) ;;
+            *)              paths=("modules/$MODULE") ;;
           esac
 
           prev=$(git tag --list "$MODULE/v*" --sort=-v:refname | head -n 1)
@@ -92,7 +92,7 @@ jobs:
             echo "## Usage"
             echo
             echo '```hcl'
-            echo "source = \"git::https://github.com/${GITHUB_REPOSITORY}.git//$MODULE?ref=$tag\""
+            echo "source = \"git::https://github.com/${GITHUB_REPOSITORY}.git//modules/$MODULE?ref=$tag\""
             echo '```'
             if [ -n "$prev" ]; then
               echo

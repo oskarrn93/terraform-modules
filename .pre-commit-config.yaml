@@ -1,6 +1,6 @@
 # Formatter and linter before every commit, the same commands CI runs.
 # Setup once per clone: `pre-commit install` (needs terraform, tflint and terraform-docs on PATH,
-# at the versions in .tool-versions; `mise install` installs them).
+# at the pinned versions: `tfenv install` for .terraform-version, `mise install` for .tool-versions).
 # A hook that reformats files fails the commit; review the changes, `git add` and commit again.
 
 repos:
@@ -16,9 +16,9 @@ repos:
 
   - repo: local
     hooks:
-      # Local terraform/tflint/terraform-docs must match .tool-versions (what CI uses).
+      # Local terraform/tflint/terraform-docs must match the pinned versions (what CI uses).
       - id: tool-versions
-        name: tool versions match .tool-versions
+        name: tool versions match .terraform-version and .tool-versions
         entry: scripts/check-tool-versions.sh
         language: system
         always_run: true
@@ -34,7 +34,7 @@ repos:
       # Regenerates the inputs/outputs/... tables in each module's README.md.
       - id: terraform-docs
         name: terraform-docs
-        entry: bash -c 'for m in */; do [ -f "$m/versions.tf" ] || continue; terraform-docs "$m" >/dev/null || exit 1; done'
+        entry: bash -c 'for m in modules/*/; do [ -f "$m/versions.tf" ] || continue; terraform-docs "$m" >/dev/null || exit 1; done'
         language: system
         files: (\.tf|\.terraform-docs\.yml|README\.md)$
         pass_filenames: false

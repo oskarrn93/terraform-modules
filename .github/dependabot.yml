@@ -1,5 +1,5 @@
 # Weekly updates, one grouped PR per ecosystem. The CLI tools in
-# .tool-versions and the tflint AWS plugin aren't supported by Dependabot;
+# .terraform-version and .tool-versions and the tflint AWS plugin aren't supported by Dependabot;
 # .github/workflows/tool-versions.yml opens PRs for those.
 version: 2
 updates:
@@ -24,8 +24,8 @@ updates:
   # this picks up any exact pins or module sources added later.
   - package-ecosystem: terraform
     directories:
-      - /static-website
-      - /website-monitoring
+      - /modules/static-website
+      - /modules/website-monitoring
     schedule:
       interval: weekly
     groups:

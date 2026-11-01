@@ -21,11 +21,61 @@ Several static sites in one private S3 bucket behind one CloudFront distribution
 - **Monitoring (optional):** an uptime alarm per live site through
   [`website-monitoring`](../website-monitoring).
 
+## Installation
+
+1. **Pick a version** from the [`static-website` releases](https://github.com/oskarrn93/terraform-modules/releases?q=static-website%2F&expanded=true).
+   Tags are named `static-website/vX.Y.Z`.
+2. **Add the module** with a git source pinned to that tag (the `//modules/static-website` part selects
+   the module inside this repo):
+
+   ```hcl
+   module "static_website" {
+     source = "git::https://github.com/oskarrn93/terraform-modules.git//modules/static-website?ref=static-website/v1.0.0"
+     # ...
+   }
+   ```
+
+3. **Configure the providers.** The module needs the default `aws` provider (bucket, CloudFront, DNS) and one aliased `aws.us_east_1`, because CloudFront certificates and Route 53 health check metrics only exist in us-east-1:
+
+   ```hcl
+   provider "aws" {
+     region = "eu-north-1"
+   }
+
+   provider "aws" {
+     alias  = "us_east_1"
+     region = "us-east-1"
+   }
+
+   module "static_website" {
+     # ...
+     providers = {
+       aws           = aws
+       aws.us_east_1 = aws.us_east_1
+     }
+   }
+   ```
+
+4. **Download it:** `terraform init`. After changing the `ref`, run `terraform init -upgrade`.
+
+Requires Terraform >= 1.3 and the AWS provider >= 5.0 (see [Requirements](#requirements)). The
+module only sets minimum versions, so pin the exact ones in your root configuration.
+
+### Upgrading
+
+Change the `ref` to the new tag, run `terraform init -upgrade` and review `terraform plan`. Read the
+release notes first: a **major** version means you have to change your code or resources get
+replaced; **minor** and **patch** versions don't.
+
+### Developing against a local checkout
+
+To try out a change before it's released, point `source` at a clone of this repo, e.g. `source = "../terraform-modules/modules/static-website"`, run `terraform init`, and switch back to the git source once the new version is tagged.
+
 ## Usage
 
 ```hcl
 module "static_website" {
-  source = "git::https://github.com/oskarrn93/terraform-modules.git//static-website?ref=static-website/v1.0.0"
+  source = "git::https://github.com/oskarrn93/terraform-modules.git//modules/static-website?ref=static-website/v1.0.0"
 
   providers = {
     aws           = aws
