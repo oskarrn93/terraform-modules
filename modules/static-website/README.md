@@ -23,14 +23,14 @@ Several static sites in one private S3 bucket behind one CloudFront distribution
 
 ## Installation
 
-1. **Pick a version** from the [`static-website` releases](https://github.com/oskarrn93/terraform-modules/releases?q=static-website%2F&expanded=true).
-   Tags are named `static-website/vX.Y.Z`.
+1. **Pick a version** from the [releases](https://github.com/oskarrn93/terraform-modules/releases).
+   Tags are named `vX.Y.Z` and cover every module in the repo.
 2. **Add the module** with a git source pinned to that tag (the `//modules/static-website` part selects
    the module inside this repo):
 
    ```hcl
    module "static_website" {
-     source = "git::https://github.com/oskarrn93/terraform-modules.git//modules/static-website?ref=static-website/v1.0.0"
+     source = "git::https://github.com/oskarrn93/terraform-modules.git//modules/static-website?ref=v1.0.0"
      # ...
    }
    ```
@@ -64,7 +64,7 @@ module only sets minimum versions, so pin the exact ones in your root configurat
 ### Upgrading
 
 Change the `ref` to the new tag, run `terraform init -upgrade` and review `terraform plan`. Read the
-release notes first: a **major** version means you have to change your code or resources get
+release notes first (they list the changes per module): a **major** version means you have to change your code or resources get
 replaced; **minor** and **patch** versions don't.
 
 ### Developing against a local checkout
@@ -75,7 +75,7 @@ To try out a change before it's released, point `source` at a clone of this repo
 
 ```hcl
 module "static_website" {
-  source = "git::https://github.com/oskarrn93/terraform-modules.git//modules/static-website?ref=static-website/v1.0.0"
+  source = "git::https://github.com/oskarrn93/terraform-modules.git//modules/static-website?ref=v1.0.0"
 
   providers = {
     aws           = aws

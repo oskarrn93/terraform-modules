@@ -11,7 +11,7 @@ list of inputs and outputs.
 | [`website-monitoring`](modules/website-monitoring) | Route 53 HTTPS health check + CloudWatch alarm for one domain, emailing through SNS when it goes down and when it recovers |
 
 Modules are used through git sources pinned to a release tag, e.g.
-`git::https://github.com/oskarrn93/terraform-modules.git//modules/<module>?ref=<module>/vX.Y.Z`.
+`git::https://github.com/oskarrn93/terraform-modules.git//modules/<module>?ref=vX.Y.Z`.
 
 ## Layout
 
@@ -23,7 +23,9 @@ Modules are used through git sources pinned to a release tag, e.g.
 
 ## Versioning
 
-Each module is versioned on its own with [SemVer](https://semver.org) tags named `<module>/vX.Y.Z`:
+The repo has one version for all modules, as [SemVer](https://semver.org) tags named `vX.Y.Z`. A
+release bumps every module's version, even ones that didn't change; the bump follows the biggest
+change in any module:
 
 - **Major**: consumers must change their code, or resources get replaced (renamed resource
   addresses, removed variables, new required variables).
@@ -89,10 +91,10 @@ node --test                                               # CloudFront Functions
 
 ## Releasing
 
-Actions → **Release** → Run workflow, then pick the module and the bump. It runs CI on `main`, works
-out the next `<module>/vX.Y.Z` from the module's latest tag (first release: v1.0.0), and creates the
-tag and a GitHub release listing the commits that touched the module since its previous release.
-It refuses to release a module with no changes.
+Actions → **Release** → Run workflow, then pick the bump. It runs CI on `main`, works out the next
+`vX.Y.Z` from the latest tag (first release: v1.0.0), and creates the tag and a GitHub release
+listing, per module, the commits since the previous release. It refuses to release when nothing
+under `modules/` changed.
 
 ## License
 

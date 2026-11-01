@@ -1,19 +1,13 @@
 name: Release
 
-# Releases one module: Actions → Release → Run workflow, pick the module and
-# the SemVer bump. Runs CI on the commit first, then creates the
-# <module>/vX.Y.Z tag and a GitHub release listing the commits since the
-# module's previous release. The first release of a module is v1.0.0.
+# Releases the whole repo: Actions → Release → Run workflow, pick the SemVer
+# bump. Runs CI on the commit first, then creates the vX.Y.Z tag and a GitHub
+# release listing the commits that touched modules/ since the previous
+# release. The first release is v1.0.0. All modules share the version.
 
 on:
   workflow_dispatch:
     inputs:
-      module:
-        description: Module to release
-        type: choice
-        options:
-          - static-website
-          - website-monitoring
       bump:
         description: "SemVer bump (see README: major = consumers must change code or resources get replaced)"
         type: choice
@@ -34,13 +28,12 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   release:
-    name: Tag and release ${{ inputs.module }}
+    name: Tag and release
     needs: ci
     runs-on: ubuntu-latest
     permissions:
       contents: write
     env:
-      MODULE: ${{ inputs.module }}
       BUMP: ${{ inputs.bump }}
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -57,24 +50,17 @@ jobs:
       - name: Work out the version and notes
         id: version
         run: |
-          # Paths whose changes affect the module. static-website calls
-          # ../website-monitoring, so its changes ship in static-website too.
-          case "$MODULE" in
-            static-website) paths=(modules/static-website modules/website-monitoring) ;;
-            *)              paths=("modules/$MODULE") ;;
-          esac
-
-          prev=$(git tag --list "$MODULE/v*" --sort=-v:refname | head -n 1)
+          prev=$(git tag --list 'v[0-9]*' --sort=-v:refname | head -n 1)
 
           if [ -z "$prev" ]; then
             next="1.0.0"
             range="HEAD"
           else
-            if git diff --quiet "$prev" HEAD -- "${paths[@]}"; then
-              echo "::error::No changes to ${paths[*]} since $prev, nothing to release"
+            if git diff --quiet "$prev" HEAD -- modules; then
+              echo "::error::No changes to modules/ since $prev, nothing to release"
               exit 1
             fi
-            IFS=. read -r major minor patch <<< "${prev#"$MODULE/v"}"
+            IFS=. read -r major minor patch <<< "${prev#v}"
             case "$BUMP" in
               major) next="$((major + 1)).0.0" ;;
               minor) next="$major.$((minor + 1)).0" ;;
@@ -83,16 +69,26 @@ jobs:
             range="$prev..HEAD"
           fi
 
-          tag="$MODULE/v$next"
+          tag="v$next"
           {
             echo "## Changes"
             echo
-            git log --no-merges --format='- %s (%h)' "$range" -- "${paths[@]}"
-            echo
+            for m in modules/*/; do
+              m=${m%/}
+              log=$(git log --no-merges --format='- %s (%h)' "$range" -- "$m")
+              [ -n "$log" ] || continue
+              echo "### ${m#modules/}"
+              echo
+              echo "$log"
+              echo
+            done
             echo "## Usage"
             echo
             echo '```hcl'
-            echo "source = \"git::https://github.com/${GITHUB_REPOSITORY}.git//modules/$MODULE?ref=$tag\""
+            for m in modules/*/; do
+              m=${m%/}
+              echo "source = \"git::https://github.com/${GITHUB_REPOSITORY}.git//$m?ref=$tag\""
+            done
             echo '```'
             if [ -n "$prev" ]; then
               echo

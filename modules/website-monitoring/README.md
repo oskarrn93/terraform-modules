@@ -14,14 +14,14 @@ uses it for its `monitoring` option.
 
 ## Installation
 
-1. **Pick a version** from the [`website-monitoring` releases](https://github.com/oskarrn93/terraform-modules/releases?q=website-monitoring%2F&expanded=true).
-   Tags are named `website-monitoring/vX.Y.Z`.
+1. **Pick a version** from the [releases](https://github.com/oskarrn93/terraform-modules/releases).
+   Tags are named `vX.Y.Z` and cover every module in the repo.
 2. **Add the module** with a git source pinned to that tag (the `//modules/website-monitoring` part selects
    the module inside this repo):
 
    ```hcl
    module "website_monitoring" {
-     source = "git::https://github.com/oskarrn93/terraform-modules.git//modules/website-monitoring?ref=website-monitoring/v1.0.0"
+     source = "git::https://github.com/oskarrn93/terraform-modules.git//modules/website-monitoring?ref=v1.0.0"
      # ...
    }
    ```
@@ -50,7 +50,7 @@ module only sets minimum versions, so pin the exact ones in your root configurat
 ### Upgrading
 
 Change the `ref` to the new tag, run `terraform init -upgrade` and review `terraform plan`. Read the
-release notes first: a **major** version means you have to change your code or resources get
+release notes first (they list the changes per module): a **major** version means you have to change your code or resources get
 replaced; **minor** and **patch** versions don't.
 
 ### Developing against a local checkout
@@ -63,7 +63,7 @@ Route 53 health check metrics only exist in us-east-1, so pass a us-east-1 provi
 
 ```hcl
 module "website_monitoring" {
-  source = "git::https://github.com/oskarrn93/terraform-modules.git//modules/website-monitoring?ref=website-monitoring/v1.0.0"
+  source = "git::https://github.com/oskarrn93/terraform-modules.git//modules/website-monitoring?ref=v1.0.0"
 
   providers = {
     aws = aws.us_east_1
