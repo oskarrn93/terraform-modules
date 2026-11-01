@@ -71,23 +71,28 @@ Modules set only minimum Terraform and provider versions; consumers pin the exac
 
 ## Development
 
-Needs [Terraform](https://developer.hashicorp.com/terraform/install) (version in
-[`.terraform-version`](.terraform-version)), [TFLint](https://github.com/terraform-linters/tflint),
-[terraform-docs](https://terraform-docs.io) and [pre-commit](https://pre-commit.com). Once per clone:
+Needs [Terraform](https://developer.hashicorp.com/terraform/install),
+[TFLint](https://github.com/terraform-linters/tflint) and [terraform-docs](https://terraform-docs.io)
+at the versions pinned in [`.tool-versions`](.tool-versions) (the ones CI uses), plus
+[pre-commit](https://pre-commit.com) and [Node.js](https://nodejs.org) (LTS, for the CloudFront
+Function tests). Once per clone:
 
 ```sh
-pre-commit install # terraform fmt, terraform-docs, tflint and whitespace/line-ending fixes on every commit
+mise install       # or asdf: installs the versions in .tool-versions
+pre-commit install # tool versions, terraform fmt, terraform-docs, tflint and whitespace/line-ending fixes on every commit
 tflint --init
 ```
 
-A hook that reformats files fails the commit; review the changes, `git add` and commit again.
+A hook that reformats files fails the commit; review the changes, `git add` and commit again. The
+tool-versions hook fails when an installed tool doesn't match `.tool-versions`.
 
 Checks, the same ones CI runs on every pull request (and fails on):
 
 ```sh
-pre-commit run --all-files                                # format, docs, lint
+pre-commit run --all-files                                # tool versions, format, docs, lint
 for d in */examples/*/; do terraform -chdir="$d" init -backend=false && terraform -chdir="$d" validate; done
 for m in static-website website-monitoring; do terraform -chdir="$m" init -backend=false && terraform -chdir="$m" test; done
+node --test                                               # CloudFront Functions
 ```
 
 - **Format:** `terraform fmt -recursive`; CI fails if it changes any file.
@@ -99,7 +104,17 @@ for m in static-website website-monitoring; do terraform -chdir="$m" init -backe
   (`preset = "all"`) plus the AWS ruleset.
 - **Validate:** through each module's `examples/`, root configurations that also show how to call it.
   (`static-website` needs an aliased provider, so it can't be validated on its own.)
-- **Test:** `terraform test` against mocked providers, so no AWS credentials are needed.
+- **Test:** `terraform test` against mocked providers, so no AWS credentials are needed, and
+  `node --test` for `static-website`'s `request.js` and `response.js` (routing, redirects, noindex,
+  CloudFront's 10 KB size limit).
+
+## Dependency updates
+
+- **Dependabot** (weekly): GitHub Actions, pre-commit hook revs and Terraform.
+- **[Tool versions](.github/workflows/tool-versions.yml)** (weekly): Terraform, TFLint and
+  terraform-docs in `.tool-versions` and the TFLint AWS plugin in `.tflint.hcl`, which Dependabot
+  doesn't support. It opens one PR and runs CI on it. Needs *Allow GitHub Actions to create and
+  approve pull requests* under Settings → Actions → General.
 
 ## Releasing
 
@@ -107,3 +122,7 @@ Actions → **Release** → Run workflow, then pick the module and the bump. It 
 out the next `<module>/vX.Y.Z` from the module's latest tag (first release: v1.0.0), and creates the
 tag and a GitHub release listing the commits that touched the module since its previous release.
 It refuses to release a module with no changes.
+
+## License
+
+[MIT](LICENSE)

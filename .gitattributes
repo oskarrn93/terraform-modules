@@ -1,1 +1,16 @@
+# Store text files with LF line endings and check them out with LF on every OS
+# (Linux, macOS and Windows), so files don't show up as changed just because of
+# line endings.
 * text=auto eol=lf
+
+# Binary files: never touch them
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.avif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary

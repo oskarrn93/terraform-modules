@@ -92,6 +92,113 @@ run "content_prefixed_by_domain" {
   }
 }
 
+run "security_headers" {
+  command = plan
+
+  assert {
+    condition     = aws_cloudfront_response_headers_policy.security.security_headers_config[0].frame_options[0].frame_option == "DENY"
+    error_message = "Pages should not be framed"
+  }
+
+  assert {
+    condition = (
+      aws_cloudfront_response_headers_policy.security.security_headers_config[0].strict_transport_security[0].access_control_max_age_sec == 63072000
+      && !aws_cloudfront_response_headers_policy.security.security_headers_config[0].strict_transport_security[0].include_subdomains
+    )
+    error_message = "HSTS should last 2 years and leave out subdomains (the zones have subdomains that aren't ours)"
+  }
+
+  assert {
+    condition     = aws_cloudfront_response_headers_policy.security.security_headers_config[0].referrer_policy[0].referrer_policy == "strict-origin-when-cross-origin"
+    error_message = "Unexpected referrer policy"
+  }
+
+  assert {
+    condition     = one([for h in aws_cloudfront_response_headers_policy.security.custom_headers_config[0].items : h.header]) == "Permissions-Policy"
+    error_message = "Permissions-Policy should be the only custom header"
+  }
+}
+
+# apply against the mocks, so the distribution can be checked against the
+# (mocked) IDs and ARNs of the policy and functions it should use.
+run "distribution_wiring" {
+  command = apply
+
+  # Mocks leave computed sets empty; the validation records need one entry per name.
+  override_resource {
+    target = aws_acm_certificate.this
+    values = {
+      arn = "arn:aws:acm:us-east-1:123456789012:certificate/test"
+      domain_validation_options = [
+        for name in ["example.com", "*.example.com", "example.se", "*.example.se"] : {
+          domain_name           = name
+          resource_record_name  = "_x.${trimprefix(name, "*.")}."
+          resource_record_type  = "CNAME"
+          resource_record_value = "_y.acm-validations.aws."
+        }
+      ]
+    }
+  }
+
+  # The provider checks these are ARNs; distinct ones show which function is where.
+  override_resource {
+    target = aws_cloudfront_function.rewrite
+    values = { arn = "arn:aws:cloudfront::123456789012:function/test-sites-rewrite" }
+  }
+
+  override_resource {
+    target = aws_cloudfront_function.response
+    values = { arn = "arn:aws:cloudfront::123456789012:function/test-sites-response" }
+  }
+
+  assert {
+    condition     = aws_cloudfront_distribution.this.default_cache_behavior[0].response_headers_policy_id == aws_cloudfront_response_headers_policy.security.id
+    error_message = "The distribution should send the security headers"
+  }
+
+  assert {
+    condition = {
+      for f in aws_cloudfront_distribution.this.default_cache_behavior[0].function_association : f.event_type => f.function_arn
+      } == {
+      "viewer-request"  = aws_cloudfront_function.rewrite.arn
+      "viewer-response" = aws_cloudfront_function.response.arn
+    }
+    error_message = "request.js should run on viewer requests and response.js on viewer responses"
+  }
+
+  assert {
+    condition     = aws_cloudfront_function.rewrite.code == file("${path.module}/request.js") && aws_cloudfront_function.response.code == file("${path.module}/response.js")
+    error_message = "Functions should deploy request.js and response.js"
+  }
+
+  assert {
+    condition     = aws_cloudfront_distribution.this.default_cache_behavior[0].viewer_protocol_policy == "redirect-to-https"
+    error_message = "HTTP should redirect to HTTPS"
+  }
+}
+
+run "price_class_defaults_to_100" {
+  command = plan
+
+  assert {
+    condition     = aws_cloudfront_distribution.this.price_class == "PriceClass_100"
+    error_message = "Default price class should be PriceClass_100"
+  }
+}
+
+run "price_class_can_be_changed" {
+  command = plan
+
+  variables {
+    price_class = "PriceClass_All"
+  }
+
+  assert {
+    condition     = aws_cloudfront_distribution.this.price_class == "PriceClass_All"
+    error_message = "price_class should reach the distribution"
+  }
+}
+
 run "monitoring_off_by_default" {
   command = plan
 

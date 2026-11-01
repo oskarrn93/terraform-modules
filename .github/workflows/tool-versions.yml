@@ -1,0 +1,95 @@
+name: Tool versions
+
+# Weekly: bumps the tools Dependabot can't (terraform, tflint and
+# terraform-docs in .tool-versions, the aws plugin in .tflint.hcl) to their
+# latest releases and opens or updates one PR with the changes.
+#
+# PRs opened with GITHUB_TOKEN don't trigger pull_request workflows, so this
+# dispatches CI on the PR branch itself; that run shows up as the PR's check.
+# Needs "Allow GitHub Actions to create and approve pull requests" in the
+# repo's Settings → Actions → General.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays 06:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: tool-versions
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the update branch
+      pull-requests: write # open the PR
+      actions: write # dispatch CI on the branch
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BRANCH: tool-versions/update
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Bump to latest releases
+        id: bump
+        run: |
+          latest() { gh api "repos/$1/releases/latest" --jq .tag_name | sed 's/^v//'; }
+
+          changes=()
+          bump_tool() { # tool, GitHub repo
+            local current new
+            current=$(awk -v t="$1" '$1 == t { print $2 }' .tool-versions)
+            new=$(latest "$2")
+            if [ -n "$new" ] && [ "$new" != "$current" ]; then
+              sed -i "s/^$1 .*/$1 $new/" .tool-versions
+              changes+=("- \`$1\` $current → $new ([release notes](https://github.com/$2/releases/tag/v$new))")
+            fi
+          }
+
+          bump_tool terraform hashicorp/terraform
+          bump_tool tflint terraform-linters/tflint
+          bump_tool terraform-docs terraform-docs/terraform-docs
+
+          current=$(sed -n 's/^ *version *= *"\(.*\)"/\1/p' .tflint.hcl)
+          new=$(latest terraform-linters/tflint-ruleset-aws)
+          if [ -n "$new" ] && [ "$new" != "$current" ]; then
+            sed -i "s/^\( *version *= *\)\"$current\"/\1\"$new\"/" .tflint.hcl
+            changes+=("- tflint AWS plugin $current → $new ([release notes](https://github.com/terraform-linters/tflint-ruleset-aws/releases/tag/v$new))")
+          fi
+
+          if [ ${#changes[@]} -eq 0 ]; then
+            echo "Everything is up to date"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          {
+            echo "Updates the tools Dependabot doesn't cover:"
+            echo
+            printf '%s\n' "${changes[@]}"
+            echo
+            echo "After merging, install the new versions locally (e.g. \`mise install\`); the pre-commit hook fails until they match."
+          } > "$RUNNER_TEMP/body.md"
+          cat "$RUNNER_TEMP/body.md"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update the PR
+        if: steps.bump.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git commit -am "Update tool versions"
+          git push --force origin "$BRANCH"
+
+          if [ -n "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[]')" ]; then
+            gh pr edit "$BRANCH" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh pr create --head "$BRANCH" --title "Update tool versions" --body-file "$RUNNER_TEMP/body.md"
+          fi
+
+          gh workflow run ci.yml --ref "$BRANCH"

@@ -1,4 +1,6 @@
-# Weekly updates, one grouped PR per ecosystem.
+# Weekly updates, one grouped PR per ecosystem. The CLI tools in
+# .tool-versions and the tflint AWS plugin aren't supported by Dependabot;
+# .github/workflows/tool-versions.yml opens PRs for those.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -7,6 +9,15 @@ updates:
       interval: weekly
     groups:
       github-actions:
+        patterns: ["*"]
+
+  # Hook revs in .pre-commit-config.yaml.
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      pre-commit:
         patterns: ["*"]
 
   # Modules only set minimum versions (>= ...), which Dependabot leaves alone;

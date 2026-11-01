@@ -1,14 +1,14 @@
 name: CI
 
-# Formatter, linter, validator and tests (mocked AWS, no credentials). Every
-# check runs even if an earlier one fails, so one run shows all problems, and
-# the job fails if any of them fail.
+# Formatter, docs, linter, validator and tests (mocked AWS, no credentials).
+# Every check runs even if an earlier one fails, so one run shows all
+# problems, and the job fails if any of them fail.
 
 on:
   pull_request:
   push:
     branches: [main]
-  workflow_dispatch:
+  workflow_dispatch: # also used by tool-versions.yml to check its update PRs
   workflow_call: # run by release.yml before tagging
 
 permissions:
@@ -21,17 +21,40 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # Same version as local development: .terraform-version (read by tfenv).
-      - id: tf-version
-        run: echo "version=$(cat .terraform-version)" >> "$GITHUB_OUTPUT"
+      # Tool versions come from .tool-versions, the same file local setups use.
+      - id: versions
+        run: |
+          while read -r tool version; do
+            echo "$tool=$version" >> "$GITHUB_OUTPUT"
+          done < .tool-versions
+
       - uses: hashicorp/setup-terraform@v4
         with:
-          terraform_version: ${{ steps.tf-version.outputs.version }}
+          terraform_version: ${{ steps.versions.outputs.terraform }}
           terraform_wrapper: false
 
       - uses: terraform-linters/setup-tflint@v6
         with:
-          tflint_version: v0.65.0
+          tflint_version: v${{ steps.versions.outputs.tflint }}
+
+      - name: Install terraform-docs
+        env:
+          VERSION: v${{ steps.versions.outputs.terraform-docs }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd "$RUNNER_TEMP"
+          gh release download "$VERSION" -R terraform-docs/terraform-docs \
+            -p "terraform-docs-$VERSION-linux-amd64.tar.gz" -p "terraform-docs-$VERSION.sha256sum"
+          grep linux-amd64.tar.gz "terraform-docs-$VERSION.sha256sum" | sha256sum -c
+          tar xzf "terraform-docs-$VERSION-linux-amd64.tar.gz" terraform-docs
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/* # only runs the CloudFront Function tests (node:test, no dependencies)
+
+      - name: Tool versions
+        run: scripts/check-tool-versions.sh
 
       # Formats in place, then fails if that changed anything.
       - name: Format
@@ -39,7 +62,7 @@ jobs:
         run: |
           terraform fmt -recursive
           if [ -n "$(git status --porcelain)" ]; then
-            echo "::error::terraform fmt changed files. Run 'terraform fmt -recursive' (or 'pre-commit run --all-files') and commit the result."
+            echo "::error::terraform fmt changed files. Run 'pre-commit run --all-files' and commit the result."
             git status --short
             git diff
             exit 1
@@ -48,18 +71,10 @@ jobs:
       # Regenerates each module's README tables, then fails if that changed anything.
       - name: Docs
         if: ${{ !cancelled() }}
-        env:
-          TERRAFORM_DOCS_VERSION: v0.24.0
-          GH_TOKEN: ${{ github.token }}
         run: |
-          cd "$RUNNER_TEMP"
-          gh release download "$TERRAFORM_DOCS_VERSION" -R terraform-docs/terraform-docs \
-            -p "terraform-docs-$TERRAFORM_DOCS_VERSION-linux-amd64.tar.gz" -p "terraform-docs-$TERRAFORM_DOCS_VERSION.sha256sum"
-          grep linux-amd64.tar.gz "terraform-docs-$TERRAFORM_DOCS_VERSION.sha256sum" | sha256sum -c
-          tar xzf "terraform-docs-$TERRAFORM_DOCS_VERSION-linux-amd64.tar.gz" terraform-docs
-          cd "$GITHUB_WORKSPACE"
           for m in */; do
-            [ -f "$m/versions.tf" ] && "$RUNNER_TEMP/terraform-docs" "$m"
+            [ -f "$m/versions.tf" ] || continue
+            terraform-docs "$m"
           done
           if [ -n "$(git status --porcelain)" ]; then
             echo "::error::Module READMEs are out of date. Run 'pre-commit run --all-files' and commit the result."
@@ -101,3 +116,7 @@ jobs:
             echo "::endgroup::"
           done
           exit $status
+
+      - name: Test CloudFront Functions
+        if: ${{ !cancelled() }}
+        run: node --test

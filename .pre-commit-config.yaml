@@ -1,5 +1,6 @@
 # Formatter and linter before every commit, the same commands CI runs.
-# Setup once per clone: `pre-commit install` (needs terraform, tflint and terraform-docs on PATH).
+# Setup once per clone: `pre-commit install` (needs terraform, tflint and terraform-docs on PATH,
+# at the versions in .tool-versions; `mise install` installs them).
 # A hook that reformats files fails the commit; review the changes, `git add` and commit again.
 
 repos:
@@ -15,6 +16,14 @@ repos:
 
   - repo: local
     hooks:
+      # Local terraform/tflint/terraform-docs must match .tool-versions (what CI uses).
+      - id: tool-versions
+        name: tool versions match .tool-versions
+        entry: scripts/check-tool-versions.sh
+        language: system
+        always_run: true
+        pass_filenames: false
+
       - id: terraform-fmt
         name: terraform fmt
         entry: terraform fmt -recursive
