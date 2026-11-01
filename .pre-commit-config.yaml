@@ -1,0 +1,38 @@
+# Formatter and linter before every commit, the same commands CI runs.
+# Setup once per clone: `pre-commit install` (needs terraform, tflint and terraform-docs on PATH).
+# A hook that reformats files fails the commit; review the changes, `git add` and commit again.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+      - id: check-merge-conflict
+
+  - repo: local
+    hooks:
+      - id: terraform-fmt
+        name: terraform fmt
+        entry: terraform fmt -recursive
+        language: system
+        files: \.(tf|tfvars|tftest\.hcl)$
+        pass_filenames: false
+
+      # Regenerates the inputs/outputs/... tables in each module's README.md.
+      - id: terraform-docs
+        name: terraform-docs
+        entry: bash -c 'for m in */; do [ -f "$m/versions.tf" ] || continue; terraform-docs "$m" >/dev/null || exit 1; done'
+        language: system
+        files: (\.tf|\.terraform-docs\.yml|README\.md)$
+        pass_filenames: false
+
+      - id: tflint
+        name: tflint
+        entry: bash -c 'tflint --init >/dev/null && tflint --recursive --config "$PWD/.tflint.hcl" --format compact'
+        language: system
+        files: (\.tf|\.tflint\.hcl)$
+        pass_filenames: false

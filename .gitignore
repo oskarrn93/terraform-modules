@@ -1,0 +1,13 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.env
+
+# Modules don't pin providers; consumers keep the lock file.
+.terraform.lock.hcl

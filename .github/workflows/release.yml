@@ -1,0 +1,110 @@
+name: Release
+
+# Releases one module: Actions → Release → Run workflow, pick the module and
+# the SemVer bump. Runs CI on the commit first, then creates the
+# <module>/vX.Y.Z tag and a GitHub release listing the commits since the
+# module's previous release. The first release of a module is v1.0.0.
+
+on:
+  workflow_dispatch:
+    inputs:
+      module:
+        description: Module to release
+        type: choice
+        options:
+          - static-website
+          - website-monitoring
+      bump:
+        description: "SemVer bump (see README: major = consumers must change code or resources get replaced)"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Tag and release ${{ inputs.module }}
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      MODULE: ${{ inputs.module }}
+      BUMP: ${{ inputs.bump }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # tags and history for the version and the notes
+
+      - name: Only release from main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Releases are cut from main, not ${GITHUB_REF}"
+          exit 1
+
+      - name: Work out the version and notes
+        id: version
+        run: |
+          # Paths whose changes affect the module. static-website calls
+          # ../website-monitoring, so its changes ship in static-website too.
+          case "$MODULE" in
+            static-website) paths=(static-website website-monitoring) ;;
+            *)              paths=("$MODULE") ;;
+          esac
+
+          prev=$(git tag --list "$MODULE/v*" --sort=-v:refname | head -n 1)
+
+          if [ -z "$prev" ]; then
+            next="1.0.0"
+            range="HEAD"
+          else
+            if git diff --quiet "$prev" HEAD -- "${paths[@]}"; then
+              echo "::error::No changes to ${paths[*]} since $prev, nothing to release"
+              exit 1
+            fi
+            IFS=. read -r major minor patch <<< "${prev#"$MODULE/v"}"
+            case "$BUMP" in
+              major) next="$((major + 1)).0.0" ;;
+              minor) next="$major.$((minor + 1)).0" ;;
+              patch) next="$major.$minor.$((patch + 1))" ;;
+            esac
+            range="$prev..HEAD"
+          fi
+
+          tag="$MODULE/v$next"
+          {
+            echo "## Changes"
+            echo
+            git log --no-merges --format='- %s (%h)' "$range" -- "${paths[@]}"
+            echo
+            echo "## Usage"
+            echo
+            echo '```hcl'
+            echo "source = \"git::https://github.com/${GITHUB_REPOSITORY}.git//$MODULE?ref=$tag\""
+            echo '```'
+            if [ -n "$prev" ]; then
+              echo
+              echo "**Full diff:** https://github.com/${GITHUB_REPOSITORY}/compare/${prev}...${tag}"
+            fi
+          } > "$RUNNER_TEMP/notes.md"
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Releasing $tag (previous: ${prev:-none})"
+          cat "$RUNNER_TEMP/notes.md"
+
+      - name: Create tag and release
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --notes-file "$RUNNER_TEMP/notes.md"

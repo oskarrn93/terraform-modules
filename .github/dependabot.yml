@@ -1,0 +1,22 @@
+# Weekly updates, one grouped PR per ecosystem.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # Modules only set minimum versions (>= ...), which Dependabot leaves alone;
+  # this picks up any exact pins or module sources added later.
+  - package-ecosystem: terraform
+    directories:
+      - /static-website
+      - /website-monitoring
+    schedule:
+      interval: weekly
+    groups:
+      terraform:
+        patterns: ["*"]

@@ -1,0 +1,37 @@
+# Generates the Requirements/Providers/Modules/Resources/Inputs/Outputs sections
+# of each module's README.md between the BEGIN_TF_DOCS/END_TF_DOCS markers.
+# Run from the repo root: `terraform-docs <module>` (the pre-commit hook does it for every module).
+
+formatter: markdown table
+
+output:
+  file: README.md
+  mode: inject
+
+content: |-
+  {{ .Requirements }}
+
+  {{ .Providers }}
+
+  {{ if .Module.ModuleCalls }}{{ .Modules }}
+
+  {{ end }}{{ .Resources }}
+
+  {{ .Inputs }}
+
+  {{ .Outputs }}
+
+sort:
+  enabled: true
+  by: required
+
+settings:
+  anchor: true
+  default: true
+  hide-empty: true
+  html: true
+  indent: 2
+  lockfile: false
+  required: true
+  sensitive: true
+  type: true
